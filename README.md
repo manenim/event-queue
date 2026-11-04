@@ -61,20 +61,6 @@ cmd/demo/main.go   The example sequence from the brief
 - **Read** returns `log[offset:]` (or up to `max` messages), then moves the subscriber's offset to the end of what it returned. Both happen under the same lock.
 - **`Publisher`** and **`Subscriber`** are thin types over the broker. They give the API the brief asks for while keeping all state in one place.
 
-### How each requirement is met
-
-| Requirement | How |
-|---|---|
-| Broker stores messages | Append-only `log []Message[T]` |
-| Publisher publishes many messages | `Publish(payload)` and `PublishBatch(payloads...)` |
-| Subscriber reads messages | `Subscriber.Read(max)` / `ReadAll()` |
-| Subscribe only once | Subscribing an existing ID is a no-op that keeps its offset. A repeat `Subscriber.Subscribe` on the same broker returns `nil` and changes nothing. |
-| Messages in publish order | The log is append-only and reads go forward from the offset |
-| Each message consumed at most once | Reading and moving the offset happen under one lock, so no message is returned twice to the same subscriber, even with concurrent reads |
-| Multiple subscribers | One offset per subscriber ID in a map |
-| Independent read positions | Each subscriber has its own offset. Reading moves only that subscriber's offset. |
-| Bonus: multiple message types | The broker is generic: `Broker[string]`, `Broker[OrderPlaced]`, and so on. Tests cover a struct payload. |
-
 ## Design decisions and trade-offs
 
 **One shared log plus offsets, not a queue per subscriber.** Copying each message into every subscriber's queue costs memory per subscriber and means a late subscriber can't see older messages. With one log, a message is stored once, and a new subscriber is just a new offset.
@@ -93,13 +79,6 @@ cmd/demo/main.go   The example sequence from the brief
 
 **Errors, not panics.** Reading before subscribing returns `ErrNotSubscribed`. All errors are exported values, so callers can check them with `errors.Is`.
 
-## Assumptions
-
-- In memory only: messages are lost when the process exits.
-- Messages are kept forever. There's no retention limit, so memory grows with the number of messages published.
-- "Consumed" means returned by `Read`. There's no separate acknowledgement step, so a message counts as delivered once it's returned.
-- One broker carries one payload type. For several unrelated types, use several brokers, or an interface or envelope type as `T`.
-
 ## Testing
 
 `go test -race ./...` runs:
@@ -108,13 +87,3 @@ cmd/demo/main.go   The example sequence from the brief
 - **The example sequence** from the brief, asserting both subscribers get all 10 messages and the total is 20.
 - **Concurrency tests** under the race detector: 8 publishers and 4 subscribers running at once (every subscriber sees every offset exactly once, in order), batches staying contiguous, and 100 goroutines subscribing one ID with exactly one succeeding.
 
-## Possible extensions
-
-The design leaves room for:
-
-- **Topics:** a map of topic name to log, each with its own offsets.
-- **Blocking reads and push delivery:** a `sync.Cond` or a channel per subscriber to wake readers when a message arrives, instead of polling.
-- **Acknowledgements and retries (at-least-once):** keep a committed offset that moves only on `Ack`, separate from the read offset.
-- **Retention:** drop log entries below the lowest subscriber offset, or by age or size.
-- **Unsubscribe, consumer groups (subscribers sharing one offset), and a choice of start position.**
-- **Persistence:** write the log to disk, for example as an append-only file.
