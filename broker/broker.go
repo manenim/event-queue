@@ -19,17 +19,77 @@ type Message[T any] struct {
 	PublishedAt time.Time
 }
 
-// Broker stores published messages. It is safe for concurrent use.
-// T is the payload type, so one broker can carry strings, structs or any
-// other type. Create one with New.
+// Broker stores published messages and each subscriber's read position.
+// It is safe for concurrent use. T is the payload type, so one broker can
+// carry strings, structs or any other type. Create one with New.
 type Broker[T any] struct {
 	mu  sync.Mutex
 	log []Message[T]
+	// offsets maps a subscriber ID to the offset of the next message it
+	// will read. Every message before that offset has been consumed.
+	offsets map[string]int
 }
 
 // New returns an empty broker.
 func New[T any]() *Broker[T] {
-	return &Broker[T]{}
+	return &Broker[T]{offsets: make(map[string]int)}
+}
+
+// Subscribe registers a subscriber ID. A new subscriber starts at offset 0,
+// so it receives every message already in the log, then every later one.
+//
+// Subscribing an ID that is already registered is a no-op: its read
+// position is kept, not reset. Subscribe reports whether the ID was newly
+// registered.
+func (b *Broker[T]) Subscribe(id string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, exists := b.offsets[id]; exists {
+		return false
+	}
+	b.offsets[id] = 0
+	return true
+}
+
+// Read returns the next unread messages for subscriber id, in publish order,
+// and moves the subscriber's offset past them. Each message is returned to a
+// given subscriber at most once. max limits how many messages are returned;
+// max <= 0 means no limit. An empty result means nothing new to read.
+//
+// Read returns ErrNotSubscribed if id has not subscribed.
+func (b *Broker[T]) Read(id string, max int) ([]Message[T], error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	offset, ok := b.offsets[id]
+	if !ok {
+		return nil, ErrNotSubscribed
+	}
+
+	end := len(b.log)
+	if max > 0 && offset+max < end {
+		end = offset + max
+	}
+	if offset == end {
+		return nil, nil
+	}
+
+	// Return a copy so callers can't change the broker's log through the slice.
+	out := make([]Message[T], end-offset)
+	copy(out, b.log[offset:end])
+	b.offsets[id] = end
+	return out, nil
+}
+
+// Pending returns how many messages subscriber id has not read yet.
+func (b *Broker[T]) Pending(id string) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	offset, ok := b.offsets[id]
+	if !ok {
+		return 0, ErrNotSubscribed
+	}
+	return len(b.log) - offset, nil
 }
 
 // Publish appends payload to the end of the log and returns the stored message.
