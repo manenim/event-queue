@@ -21,12 +21,13 @@ func (s *Subscriber[T]) Subscribe(b *Broker[T]) error {
 
 	switch {
 	case s.broker == b:
-		return nil
+		return nil // already subscribed: no-op
 	case s.broker != nil:
 		return ErrAlreadySubscribed
 	case s.id == "":
 		return ErrEmptySubscriberID
 	}
+	// A shared ID would mean a shared offset, so reject duplicates.
 	if !b.Subscribe(s.id) {
 		return ErrSubscriberIDTaken
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/manenim/event-queue/broker"
 )
 
+// Runs the 7-step example sequence from the assessment brief.
 func main() {
 	b := broker.New[string]()
 
@@ -37,6 +38,7 @@ func main() {
 	}
 	fmt.Printf("\nTotal message logs: %d\n", total)
 
+	// Show that re-subscribing is a no-op and nothing is consumed twice.
 	fmt.Println("\nChecks:")
 
 	must(sub1.Subscribe(b))

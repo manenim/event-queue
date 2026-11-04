@@ -1,3 +1,5 @@
+// Package broker is an in-memory pub-sub broker: one append-only log,
+// with a separate read offset per subscriber.
 package broker
 
 import (
@@ -14,7 +16,7 @@ type Message[T any] struct {
 type Broker[T any] struct {
 	mu      sync.Mutex
 	log     []Message[T]
-	offsets map[string]int
+	offsets map[string]int // subscriber ID -> offset of its next unread message
 }
 
 func New[T any]() *Broker[T] {
@@ -24,9 +26,11 @@ func New[T any]() *Broker[T] {
 func (b *Broker[T]) Subscribe(id string) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	// Already subscribed: no-op, keep the existing offset.
 	if _, exists := b.offsets[id]; exists {
 		return false
 	}
+	// Start at 0 so a late subscriber still sees the full history.
 	b.offsets[id] = 0
 	return true
 }
@@ -48,6 +52,8 @@ func (b *Broker[T]) Read(id string, max int) ([]Message[T], error) {
 		return nil, nil
 	}
 
+	// Copy so callers can't modify the log, and advance the offset under the
+	// same lock so no message is delivered twice.
 	out := make([]Message[T], end-offset)
 	copy(out, b.log[offset:end])
 	b.offsets[id] = end
@@ -70,6 +76,7 @@ func (b *Broker[T]) Publish(payload T) Message[T] {
 	return b.appendLocked(payload)
 }
 
+// PublishBatch appends all payloads under one lock, so the batch stays contiguous.
 func (b *Broker[T]) PublishBatch(payloads ...T) []Message[T] {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -86,6 +93,7 @@ func (b *Broker[T]) Len() int {
 	return len(b.log)
 }
 
+// appendLocked must be called with b.mu held.
 func (b *Broker[T]) appendLocked(payload T) Message[T] {
 	msg := Message[T]{
 		Offset:      len(b.log),
