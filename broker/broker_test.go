@@ -40,7 +40,6 @@ func TestPublishBatchAppendsInOrder(t *testing.T) {
 	}
 }
 
-// payloads extracts the payloads from msgs, in order.
 func payloads[T any](msgs []broker.Message[T]) []T {
 	out := make([]T, len(msgs))
 	for i, m := range msgs {
@@ -107,7 +106,6 @@ func TestSubscribeTwiceIsNoOp(t *testing.T) {
 	if b.Subscribe("s1") {
 		t.Fatal("second Subscribe should report no change")
 	}
-	// The repeat subscribe must not reset the read position.
 	if got := mustRead(t, b, "s1", 0); len(got) != 0 {
 		t.Fatalf("after re-subscribe got %v, want nothing (offset must be kept)", got)
 	}
@@ -122,7 +120,6 @@ func TestSubscribersHaveIndependentReadPositions(t *testing.T) {
 	if got, want := mustRead(t, b, "s1", 2), []string{"a", "b"}; !slices.Equal(got, want) {
 		t.Fatalf("s1 got %v, want %v", got, want)
 	}
-	// s1 reading must not move s2.
 	if got, want := mustRead(t, b, "s2", 0), []string{"a", "b", "c"}; !slices.Equal(got, want) {
 		t.Fatalf("s2 got %v, want %v", got, want)
 	}

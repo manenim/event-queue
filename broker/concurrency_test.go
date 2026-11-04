@@ -8,9 +8,6 @@ import (
 	"github.com/manenim/event-queue/broker"
 )
 
-// TestConcurrentPublishAndRead runs several publishers and subscribers at the
-// same time. Every subscriber must see every message exactly once, in log
-// order (offsets 0, 1, 2, ... with no gaps or repeats).
 func TestConcurrentPublishAndRead(t *testing.T) {
 	const (
 		publishers    = 8
@@ -40,7 +37,6 @@ func TestConcurrentPublishAndRead(t *testing.T) {
 		}()
 	}
 
-	// Subscribers read in small batches while publishing is still going on.
 	received := make([][]broker.Message[string], subscribers)
 	var readers sync.WaitGroup
 	for i, s := range subs {
@@ -73,8 +69,6 @@ func TestConcurrentPublishAndRead(t *testing.T) {
 	}
 }
 
-// TestConcurrentBatchesStayContiguous checks that a batch is never split up
-// by messages from another publisher.
 func TestConcurrentBatchesStayContiguous(t *testing.T) {
 	const batches, batchSize = 50, 10
 
@@ -107,8 +101,6 @@ func TestConcurrentBatchesStayContiguous(t *testing.T) {
 	}
 }
 
-// TestConcurrentSubscribeIsNoOp has many goroutines subscribe the same ID at
-// once. Exactly one must register it.
 func TestConcurrentSubscribeIsNoOp(t *testing.T) {
 	b := broker.New[string]()
 	var (

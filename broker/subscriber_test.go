@@ -95,8 +95,6 @@ func TestSubscriberCannotJoinSecondBroker(t *testing.T) {
 	}
 }
 
-// TestExampleSequence runs the exact sequence from the assessment brief and
-// checks the expected outcome: both subscribers get all 10 messages in order.
 func TestExampleSequence(t *testing.T) {
 	b := broker.New[string]()
 	pub := broker.NewPublisher(b)
