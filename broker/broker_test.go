@@ -1,6 +1,7 @@
 package broker_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/manenim/event-queue/broker"
@@ -48,18 +49,6 @@ func payloads[T any](msgs []broker.Message[T]) []T {
 	return out
 }
 
-func equal(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func mustRead(t *testing.T, b *broker.Broker[string], id string, max int) []string {
 	t.Helper()
 	msgs, err := b.Read(id, max)
@@ -74,7 +63,7 @@ func TestReadReturnsMessagesInPublishOrder(t *testing.T) {
 	b.Subscribe("s1")
 	b.PublishBatch("1", "2", "3", "4")
 
-	if got, want := mustRead(t, b, "s1", 0), []string{"1", "2", "3", "4"}; !equal(got, want) {
+	if got, want := mustRead(t, b, "s1", 0), []string{"1", "2", "3", "4"}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
@@ -86,7 +75,7 @@ func TestLateSubscriberReadsFromStartOfLog(t *testing.T) {
 	b.Publish("after-1")
 
 	want := []string{"before-1", "before-2", "after-1"}
-	if got := mustRead(t, b, "late", 0); !equal(got, want) {
+	if got := mustRead(t, b, "late", 0); !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
@@ -102,7 +91,7 @@ func TestEachMessageIsConsumedAtMostOnce(t *testing.T) {
 	}
 
 	b.Publish("c")
-	if got, want := mustRead(t, b, "s1", 0), []string{"c"}; !equal(got, want) {
+	if got, want := mustRead(t, b, "s1", 0), []string{"c"}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want only the new message %v", got, want)
 	}
 }
@@ -130,14 +119,14 @@ func TestSubscribersHaveIndependentReadPositions(t *testing.T) {
 	b.Subscribe("s2")
 	b.PublishBatch("a", "b", "c")
 
-	if got, want := mustRead(t, b, "s1", 2), []string{"a", "b"}; !equal(got, want) {
+	if got, want := mustRead(t, b, "s1", 2), []string{"a", "b"}; !slices.Equal(got, want) {
 		t.Fatalf("s1 got %v, want %v", got, want)
 	}
 	// s1 reading must not move s2.
-	if got, want := mustRead(t, b, "s2", 0), []string{"a", "b", "c"}; !equal(got, want) {
+	if got, want := mustRead(t, b, "s2", 0), []string{"a", "b", "c"}; !slices.Equal(got, want) {
 		t.Fatalf("s2 got %v, want %v", got, want)
 	}
-	if got, want := mustRead(t, b, "s1", 0), []string{"c"}; !equal(got, want) {
+	if got, want := mustRead(t, b, "s1", 0), []string{"c"}; !slices.Equal(got, want) {
 		t.Fatalf("s1 got %v, want %v", got, want)
 	}
 }
@@ -147,10 +136,10 @@ func TestReadRespectsMax(t *testing.T) {
 	b.Subscribe("s1")
 	b.PublishBatch("a", "b", "c")
 
-	if got, want := mustRead(t, b, "s1", 1), []string{"a"}; !equal(got, want) {
+	if got, want := mustRead(t, b, "s1", 1), []string{"a"}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
-	if got, want := mustRead(t, b, "s1", 10), []string{"b", "c"}; !equal(got, want) {
+	if got, want := mustRead(t, b, "s1", 10), []string{"b", "c"}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
